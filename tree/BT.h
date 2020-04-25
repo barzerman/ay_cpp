@@ -6,9 +6,15 @@
 #define CPP_BT_H
 #include <iostream>
 #include <iostream>
+#include <variant>
+#include <list>
+
+template <class T>
+using Children = std::pair<T, T>;
 
 template <class T>
 class BT {
+
     T data;
     BT* left, *right;
     static constexpr char pad_char = ' ';
@@ -25,7 +31,9 @@ class BT {
         return fp;
     }
 public:
-    explicit BT(const T& d, BT* left= nullptr, BT* right=nullptr) : data(d), left(left), right(right) {}
+
+    explicit BT(const T& d, BT* left= nullptr, BT* right=nullptr) : data(d), left(left), right(right)
+        {}
 
     std::ostream& stream_node(std::ostream& fp) const {
         return _stream_node(fp, this, 0);
@@ -34,6 +42,7 @@ public:
         delete left;
         delete right;
     }
+
 };
 
 template <class T>
