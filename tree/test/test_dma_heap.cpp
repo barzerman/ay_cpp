@@ -34,6 +34,12 @@ int main(int argc, const char* argv[]) {
         }
         bfs_print(std::cout, h2);
 
+
+        dma_tree_dfs<decltype(h1)> traverser(h1);
+        [&] (const decltype(traverser)::path_type& path) -> bool {
+            std::cout << std::string(4, ' ') << path.peek()
+            return true;
+        };
     }
     {
 

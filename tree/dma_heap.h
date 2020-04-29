@@ -1,3 +1,5 @@
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "modernize-use-nodiscard"
 //
 // Created by andrey yanpolsky on 4/23/20.
 //
@@ -27,18 +29,65 @@ public:
     using value_type = std::pair<data_type, tracker_type>;
     using vector_type = typename std::vector<value_type>;
     using size_type = typename vector_type::size_type;
+
     using children_type = std::pair<size_type, size_type>;
 
     static const size_type ROOT_POS = 1;
     using const_iterator = typename vector_type::const_iterator;
 
-    const_iterator begin() const { return vec_.begin()+1;}
-    const_iterator end() const { return vec_.end();}
-
+    // constructors and assignment operators
     dma_heap() = default;
     dma_heap(const dma_heap&) = default;
     dma_heap(dma_heap&&)  noexcept = default;
     dma_heap& operator =(dma_heap&&)  noexcept = default;
+    // end of constructors and assignment ops
+
+    // array heap order constant iterators
+    // use this iterator for quickly visiting all nodes in the heap - it's much faster than a traversal
+    const_iterator begin() const { return vec_.begin()+ROOT_POS;}
+    const_iterator end() const { return vec_.end();}
+
+    // tree traversal constant iterator 
+    template <template <typename...> typename Container>
+    class traverse_iterator {
+    public:
+        explicit traverse_iterator(const dma_heap& h) : heap_(h), cur_pos_(heap_.root()) {
+            if(cur_pos_)
+                tainer_.push(cur_pos_);
+        }
+        bool is_valid() const {return bool(cur_pos_);}
+
+        traverse_iterator& operator ++() {
+            auto pop_pos = tainer_.pop();
+            if(auto [left, right] = tainer_.children(pop_pos); left) {
+                tainer_.push(left);
+                if(right) {
+                    tainer_.push(right);
+                }
+            }
+            cur_pos_ = is_valid() ? peek_next_() : 0;
+        }
+
+    private:
+        const dma_heap& heap_;
+        size_type cur_pos_;
+        Container<size_type> tainer_;
+        size_type peek_next_() const {
+            if constexpr (std::is_same_v<Container, std::stack>) {
+                return tainer_.top();
+            } else if constexpr (std::is_same_v<Container, std::queue>) {
+                return tainer_.front();
+            } else {
+                return tainer_.peek();
+            }
+        }
+    };
+    using dfs_iterator = traverse_iterator<std::stack>;
+
+    using bfs_iterator = traverse_iterator<std::queue>;
+    dfs_iterator&& dfs_begin() const {return dfs_iterator (*this);}
+
+    bfs_iterator bfs_begin() const {return bfs_iterator (*this);}
 
     template <typename Iter>
     dma_heap(Iter begin, Iter end) {
@@ -64,8 +113,8 @@ public:
     value_type&& peek_by_pos(size_type pos) const {
         return vec_[pos];
     }
-    [[nodiscard]] bool empty() const {return vec_.size() <= 1;}
-    [[nodiscard]] size_type size() const {return vec_.size();}
+    bool empty() const {return vec_.size() <= 1;}
+    size_type size() const {return vec_.size();}
 
     typename vector_type::const_iterator heap_begin() const {return vec_.begin() + 1;}
     typename vector_type::const_iterator heap_end() const {return vec_.end();}
@@ -83,9 +132,9 @@ public:
             return {0, 0}; // leaf
         }
     }
-    constexpr size_type root_pos() const { return ROOT_POS;}
+    constexpr size_type root() const { return (empty() ? 0: ROOT_POS);}
 private:
-    [[nodiscard]] size_type data_x_lt_y_(size_type l, size_type r) const {
+    size_type data_x_lt_y_(size_type l, size_type r) const {
         // returns l if l < r. 0 otherwise
         return Compare()(vec_[l].first, vec_[r].first) ? l : 0;
     }
@@ -94,7 +143,7 @@ private:
     }
     // if node is less than its parent returns the parents position
     // otherwise returns 0
-    [[nodiscard]] size_type is_lt_parent(size_type pos) const {
+    size_type is_lt_parent(size_type pos) const {
         auto parent_pos = pos/2;
         if (pos > ROOT_POS) {
             return is_x_lt_y_(pos, parent_pos) ? parent_pos :0;
@@ -103,7 +152,7 @@ private:
     }
     // returns position of the smallest child which is smaller than `pos` node
     // if neither child is smaller than the pos or if there are no children return 0
-    [[nodiscard]] size_type is_gt_child(size_type pos) const {
+    size_type is_gt_child(size_type pos) const {
         if(pos*2 + 1 < vec_.size()) { // not a leaf
             auto left = pos*2, right = left+1;
             if(data_x_lt_y_(left, pos) || data_x_lt_y_(right, pos)) {
@@ -142,15 +191,15 @@ private:
 };
 
 template <typename DmaTree, typename Container=std::stack<typename DmaTree::size_type>>
-struct dma_tree_traverser {
+struct dma_tree_iterator {
     using size_type = typename DmaTree::size_type;
     using path_type = Container;
 
     const DmaTree& tree_;
 
-    explicit dma_tree_traverser(const DmaTree& tree): tree_(tree) {}
+    explicit dma_tree_iterator(const DmaTree& tree): tree_(tree) {}
 
-    template <typename CB=std::unary_function<size_type, bool>>
+    template <typename CB=std::unary_function<const path_type& , bool>>
     typename  DmaTree::size_type operator()(CB& cb) const {
         path_type path;
         path.push(tree_.root_pos());
@@ -158,8 +207,9 @@ struct dma_tree_traverser {
         while(!path.empty()) {
             auto pos = path.pop();
             visited_count ++;
-            if(!cb(pos))
+            if(!cb(pos, path)) {
                 break;
+            }
 
             if( auto [left, right] = tree_.children(pos); left ) {
                 path.push(left);
@@ -174,9 +224,10 @@ struct dma_tree_traverser {
 };
 
 template <typename DmaTree>
-using dma_tree_dfs = dma_tree_traverser<DmaTree, std::stack<typename DmaTree::size_type>>;
+using dma_tree_dfs = dma_tree_iterator<DmaTree, std::stack<typename DmaTree::size_type>>;
 
 template <typename DmaTree>
-using dma_tree_bfs = dma_tree_traverser<DmaTree, std::queue<typename DmaTree::size_type>>;
+using dma_tree_bfs = dma_tree_iterator<DmaTree, std::queue<typename DmaTree::size_type>>;
 
 #endif //CPP_DMA_HEAP_H
+
