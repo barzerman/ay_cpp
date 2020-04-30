@@ -30,7 +30,12 @@ int main(int argc, const char* argv[]) {
         bfs_print(std::cout, h1);
         for(auto x = h1.dfs_begin(); x.is_valid(); ++x) {
             auto v = *x;
-            std::cout << "val:" << v.first << std::endl;
+            std::cout << "traversed val:" << v.first << std::endl;
+        }
+
+        for(; !h1.empty();) {
+            auto x = h1.pop_heap();
+            std::cout << "popped:" << x.first << std::endl;
         }
     }
     {
