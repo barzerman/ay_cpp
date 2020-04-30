@@ -47,7 +47,7 @@ public:
     const_iterator begin() const { return vec_.begin()+ROOT_POS;}
     const_iterator end() const { return vec_.end();}
 
-    // tree traversal constant iterator 
+    // tree traversal constant iterator
     template <template <typename...> typename Container>
     class traverse_iterator {
     public:
@@ -55,27 +55,41 @@ public:
             if(cur_pos_)
                 tainer_.push(cur_pos_);
         }
-        bool is_valid() const {return bool(cur_pos_);}
+        bool is_valid() const {
+            return bool(cur_pos_);
+        }
 
         traverse_iterator& operator ++() {
-            auto pop_pos = tainer_.pop();
-            if(auto [left, right] = tainer_.children(pop_pos); left) {
+            auto pop_pos = tainer_pop_();
+            if(auto [left, right] = heap_.children(pop_pos); left) {
                 tainer_.push(left);
                 if(right) {
                     tainer_.push(right);
                 }
             }
             cur_pos_ = is_valid() ? peek_next_() : 0;
+            return *this;
         }
-
+        const dma_heap::value_type& operator *() const {
+            return heap_.value(cur_pos_);
+        }
+        const dma_heap::value_type& operator ->() const {
+            return heap_.value(cur_pos_);
+        }
     private:
         const dma_heap& heap_;
         size_type cur_pos_;
-        Container<size_type> tainer_;
+        using tainer_type = Container<size_type>;
+        tainer_type tainer_;
+        size_type tainer_pop_() {
+             auto val = peek_next_();
+             tainer_.pop();
+             return val;
+        }
         size_type peek_next_() const {
-            if constexpr (std::is_same_v<Container, std::stack>) {
+            if constexpr (std::is_same_v<tainer_type, std::stack<size_type>>) {
                 return tainer_.top();
-            } else if constexpr (std::is_same_v<Container, std::queue>) {
+            } else if constexpr (std::is_same_v<tainer_type, std::queue<size_type>>) {
                 return tainer_.front();
             } else {
                 return tainer_.peek();
@@ -85,7 +99,7 @@ public:
     using dfs_iterator = traverse_iterator<std::stack>;
 
     using bfs_iterator = traverse_iterator<std::queue>;
-    dfs_iterator&& dfs_begin() const {return dfs_iterator (*this);}
+    dfs_iterator dfs_begin() const {return std::move(dfs_iterator (*this));}
 
     bfs_iterator bfs_begin() const {return bfs_iterator (*this);}
 

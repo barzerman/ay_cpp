@@ -28,18 +28,10 @@ int main(int argc, const char* argv[]) {
             h1.push_heap(a);
         }
         bfs_print(std::cout, h1);
-        dma_heap<int> h2;
-        for(auto a: {9, 10, 8, 6, 5, 7, 1}) {
-            h2.push_heap(a);
+        for(auto x = h1.dfs_begin(); x.is_valid(); ++x) {
+            auto v = *x;
+            std::cout << "val:" << v.first << std::endl;
         }
-        bfs_print(std::cout, h2);
-
-
-        dma_tree_dfs<decltype(h1)> traverser(h1);
-        [&] (const decltype(traverser)::path_type& path) -> bool {
-            std::cout << std::string(4, ' ') << path.peek()
-            return true;
-        };
     }
     {
 
