@@ -113,34 +113,44 @@ public:
     dma_heap& operator =(dma_heap&&)  noexcept = default;
     template <typename Iter> dma_heap(Iter begin, Iter end) {
         for(auto i = begin; i != end; i++ ) {
-            push_heap(*i);
+            push(*i);
         }
     }
 
-    template<typename U = data_type>
     // endregion
     // region Public interface
-    void push_heap(U&& dt, PosTracker&& pt=identity()) {
-        static_assert(std::is_same_v<std::decay_t<U>, std::decay_t<DataType>>);
-
+    template<typename U> void push(U&& v) {
         if (vec_.empty())
-            vec_.resize(1);
-        vec_.emplace_back(std::move(value_type {dt, pt}));
+            vec_.resize(ROOT_POS);
+
+        if constexpr(std::is_same_v<std::decay_t<U>,std::decay_t<value_type>> ) {
+            vec_.emplace_back(v);
+        } else if constexpr(std::is_same_v<std::decay_t<U>,std::decay_t<data_type>> ) {
+            vec_.emplace_back(std::move(value_type {v, std::move(identity())}));
+        } else {
+            vec_.emplace_back(std::move(value_type {v}));
+        }
         filter_up_();
     }
+
+    template<typename U = data_type> void push(U&& dt, PosTracker&& pt) {
+        static_assert(std::is_same_v<std::decay_t<U>, std::decay_t<data_type>>);
+        push(std::move(value_type {dt, pt}));
+    }
+
     // pops the top element
-    value_type pop_heap() {
+    value_type pop_data() {
         auto rv = vec_[ROOT_POS];
         vec_[ROOT_POS] = vec_.back();
         vec_.pop_back();
         filter_down_();
         return rv;
     }
-    bool empty() const {return vec_.size() <= 1;}
+    bool empty() const {return vec_.size() <= ROOT_POS;}
 
     size_type size() const {return vec_.size();}
 
-    size_type last_pos() const {return vec_.size() -1; }
+    size_type last_pos() const {return vec_.size() - ROOT_POS; }
 
     const value_type& value(size_type pos=ROOT_POS) const {return vec_[pos];}
 
@@ -223,36 +233,13 @@ struct dma_tree_iterator {
     const DmaTree& tree_;
 
     explicit dma_tree_iterator(const DmaTree& tree): tree_(tree) {}
-
-    template <typename CB=std::unary_function<const path_type& , bool>>
-    typename  DmaTree::size_type operator()(CB& cb) const {
-        path_type path;
-        path.push(tree_.root_pos());
-        size_type visited_count = 0;
-        while(!path.empty()) {
-            auto pos = path.pop();
-            visited_count ++;
-            if(!cb(pos, path)) {
-                break;
-            }
-
-            if( auto [left, right] = tree_.children(pos); left ) {
-                path.push(left);
-                if(right) {
-                    path.push(right);
-                }
-            }
-        }
-        return visited_count;
-    }
-
 };
 
 template <typename DmaTree>
-using dma_tree_dfs = dma_tree_iterator<DmaTree, std::stack<typename DmaTree::size_type>>;
+using dma_tree_dft_iterator = dma_tree_iterator<DmaTree, std::stack<typename DmaTree::size_type>>;
 
 template <typename DmaTree>
-using dma_tree_bfs = dma_tree_iterator<DmaTree, std::queue<typename DmaTree::size_type>>;
+using dma_tree_bft_iterator = dma_tree_iterator<DmaTree, std::queue<typename DmaTree::size_type>>;
 
 #endif //CPP_DMA_HEAP_H
 
