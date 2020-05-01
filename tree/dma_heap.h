@@ -13,6 +13,7 @@
 #include <vector>
 #include <stack>
 #include <queue>
+#include <iostream>
 
 // array heap implementation with direct access to elements
 // and position tracing. every new element placed in the array
@@ -118,7 +119,7 @@ public:
     }
 
     // endregion
-    // region Public interface
+    // region Mutating interfaces
     template<typename U> void push(U&& v) {
         if (vec_.empty())
             vec_.resize(ROOT_POS);
@@ -139,13 +140,39 @@ public:
     }
 
     // pops the top element
-    value_type pop_data() {
+    value_type pop() {
         auto rv = vec_[ROOT_POS];
+        if constexpr (!std::is_same_v<tracker_type, identity>) {vec_.back().second(0);}
         vec_[ROOT_POS] = vec_.back();
         vec_.pop_back();
         filter_down_();
         return rv;
     }
+
+    void erase(size_type pos) {
+        if(pos == last_pos()) {
+            if constexpr (!std::is_same_v<tracker_type, identity>) {vec_.back().second(0);}
+            vec_.pop_back();
+        } else {
+            vec_[pos].second(0);
+            vec_[pos] = vec_.back();
+            vec_[pos].second(pos);
+            filter_down_(pos);
+            vec_.pop_back();
+        }
+    }
+
+    void clear() {
+        if constexpr (!std::is_same_v<tracker_type, identity>) {
+            for(size_type i = 0; i < vec_.size(); i++) {
+                vec_[i].second(0);
+            }
+        }
+        vec_.clear();
+    }
+
+    // endregion
+    // region Constant interfaces
     bool empty() const {return vec_.size() <= ROOT_POS;}
 
     size_type size() const {return vec_.size();}

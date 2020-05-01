@@ -53,7 +53,7 @@ namespace {
             popped_data.reserve(arr.size());
 
             for(; !heap.empty(); ++iter_count) {
-                auto x = heap.pop_data();
+                auto x = heap.pop();
                 popped_data.push_back(x.first);
             }
             assert(iter_count == arr.size());
@@ -64,6 +64,11 @@ namespace {
                 assert(*x < *y);
             }
         }
+    }
+    void test_erase() {
+        auto arr = make_shuffled_array<int>(100);
+        dma_heap<decltype(arr)::value_type> heap;
+        for(auto a: arr) heap.push(a);
     }
 }
 
