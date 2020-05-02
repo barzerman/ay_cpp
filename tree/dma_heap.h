@@ -24,6 +24,8 @@
 //              must have void operator(int) {} defined
 
 using identity = struct {void operator()(int){};};
+inline std::ostream & operator << (std::ostream& fp, const identity& ) {return fp << "<identity>";}
+
 template <typename DataType, typename Compare=std::less<>, typename PosTracker = identity>
 class dma_heap {
 public:
@@ -37,11 +39,16 @@ public:
     using children_type = std::pair<size_type, size_type>;
     static const size_type ROOT_POS = 1;
 
+    using const_iterator = typename vector_type::const_iterator;
+    // array heap order constant iterators
+    // use this iterator for quickly visiting all nodes in the heap - it's much faster than a traversal
+    const_iterator begin() const { return vec_.begin()+ROOT_POS;}
+    const_iterator end() const { return vec_.end();}
+
     // endregion
     // region Iterators
     // tree traversal constant iterator
-    template <template <typename...> typename Container>
-    class traverse_iterator {
+    template <template <typename...> typename Container> class traverse_iterator {
     public:
         explicit traverse_iterator(const dma_heap& h) : heap_(h), cur_pos_(heap_.root()) {
             if(cur_pos_)
@@ -68,6 +75,7 @@ public:
         const dma_heap::value_type& operator ->() const {
             return heap_.value(cur_pos_);
         }
+
     private:
         const dma_heap& heap_;
         size_type cur_pos_;
@@ -89,21 +97,31 @@ public:
             }
         }
     };
-
-    using const_iterator = typename vector_type::const_iterator;
-    // array heap order constant iterators
-    // use this iterator for quickly visiting all nodes in the heap - it's much faster than a traversal
-    const_iterator begin() const { return vec_.begin()+ROOT_POS;}
-
-    const_iterator end() const { return vec_.end();}
     using dfs_iterator = traverse_iterator<std::stack>;
 
     using bfs_iterator = traverse_iterator<std::queue>;
     dfs_iterator dfs_begin() const {return std::move(dfs_iterator (*this));}
     bfs_iterator bfs_begin() const {return bfs_iterator (*this);}
-    typename vector_type::const_iterator heap_begin() const {return vec_.begin() + 1;}
-    typename vector_type::const_iterator heap_end() const {return vec_.end();}
 
+    size_type count_data(const data_type& d) const {
+        size_type count = 0;
+        scan_data(d, [&] (size_type pos) {
+            count ++;
+        });
+        return count;
+    }
+    // scans the heap and invoke the callback `cb` every time data value `d` is encountered
+    // callback must have `operator()(const data_type&)` defined
+    template <typename CB> void scan_data(const data_type& d, CB cb) const {
+        if(empty())
+            return;
+
+        for(auto i = vec_.begin() + ROOT_POS; i != vec_.end(); i++) {
+            if(i->first == d) {
+                cb(i-vec_.begin());
+            }
+        }
+    }
     // endregion
     // region Constructors and Assignment operators
     dma_heap() = default;
@@ -152,13 +170,23 @@ public:
     void erase(size_type pos) {
         if(pos == last_pos()) {
             if constexpr (!std::is_same_v<tracker_type, identity>) {vec_.back().second(0);}
+            vec_.back().second(0);
             vec_.pop_back();
         } else {
             vec_[pos].second(0);
             vec_[pos] = vec_.back();
-            vec_[pos].second(pos);
-            filter_down_(pos);
             vec_.pop_back();
+            vec_[pos].second(pos);
+            if(pos < ROOT_POS) {
+                filter_down_(pos);
+            }
+            else {
+                if(auto parent_pos = pos/2; is_x_lt_y_(pos, parent_pos)) {
+                    filter_up_(pos);
+                } else {
+                    filter_down_(pos);
+                }
+            }
         }
     }
 
@@ -180,6 +208,7 @@ public:
     size_type last_pos() const {return vec_.size() - ROOT_POS; }
 
     const value_type& value(size_type pos=ROOT_POS) const {return vec_[pos];}
+    const data_type & data(size_type pos=ROOT_POS) const {return vec_[pos].first;}
 
     children_type children(size_type pos) const {
         if( auto left = 2*pos, right = left +1; left < last_pos()) {
@@ -191,6 +220,7 @@ public:
         }
     }
     constexpr size_type root() const { return (empty() ? 0: ROOT_POS);}
+    const auto& get_vec() const {return vec_;}
     // endregion
 private:
     bool is_x_lt_y_(size_type x, size_type y) const {
@@ -251,22 +281,6 @@ private:
     }
     std::vector<value_type> vec_;
 };
-
-template <typename DmaTree, typename Container=std::stack<typename DmaTree::size_type>>
-struct dma_tree_iterator {
-    using size_type = typename DmaTree::size_type;
-    using path_type = Container;
-
-    const DmaTree& tree_;
-
-    explicit dma_tree_iterator(const DmaTree& tree): tree_(tree) {}
-};
-
-template <typename DmaTree>
-using dma_tree_dft_iterator = dma_tree_iterator<DmaTree, std::stack<typename DmaTree::size_type>>;
-
-template <typename DmaTree>
-using dma_tree_bft_iterator = dma_tree_iterator<DmaTree, std::queue<typename DmaTree::size_type>>;
 
 #endif //CPP_DMA_HEAP_H
 

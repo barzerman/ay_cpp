@@ -22,6 +22,13 @@ namespace test_util {
         stream_range(sstr, begin, end, delim);
         return sstr.str();
     }
+    template <typename Vec>
+    void random_shuffle_vec(Vec& v) {
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(v.begin(), v.end(), g);
+    }
+
     template <typename T>
     auto make_shuffled_array(int size)
     {

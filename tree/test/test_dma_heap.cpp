@@ -9,17 +9,15 @@
 
 namespace {
     template <typename Heap>
-    std::ostream& bfs_print(std::ostream& fp, const Heap& heap, int indent_width=4)  {
-        auto depth = heap.size();
-        for(; depth > 0; depth /=2);
-
-        int pos = 1;
-        std::vector<typename Heap::data_type> stack;
-
-        for(auto i = heap.begin(); i != heap.end(); i++, pos++ ) {
-            fp << std::string (indent_width*(pos/2), ' ') << i->first << std::endl;
+    bool heap_has_pop_invariant(Heap& heap) {
+        // empties the heap
+        for(auto val = heap.pop().first, next_val= heap.pop().first; !heap.empty(); val = next_val, next_val = heap.pop().first) {
+            if(!(val <= next_val)) {
+                std::cerr << "heap invariant violated:" << val << "," << next_val << std::endl;
+                return false;
+            }
         }
-        return fp;
+        return true;
     }
 }
 
@@ -66,13 +64,40 @@ namespace {
         }
     }
     void test_erase() {
-        auto arr = make_shuffled_array<int>(100);
-        dma_heap<decltype(arr)::value_type> heap;
-        for(auto a: arr) heap.push(a);
+
+        for(int x =0; x < 10; x++) { // testing erasing single elements
+            auto arr = make_shuffled_array<int>(100);
+            for(int i=1; i< arr.size(); i++) {
+                dma_heap<decltype(arr)::value_type> heap;
+                for(auto a: arr) heap.push(a);
+                decltype(heap)::data_type iData = heap.data(i);
+                assert(heap.count_data(iData) ==1);
+                heap.erase(i);
+                assert(heap.count_data(iData) ==0);
+                assert(heap_has_pop_invariant(heap));
+            }
+        }
+        { // erasing multiples
+            auto arr = make_shuffled_array<int>(10000);
+            dma_heap<decltype(arr)::value_type> heap;
+            for (auto a: arr) heap.push(a);
+
+            std::vector<decltype(heap)::data_type> erased_data;
+            for(int i = 0; i < arr.size(); i += 3 ) {
+                erased_data.push_back(heap.data(i));
+                heap.erase(i);
+            }
+            for(auto el = erased_data.begin(); el != erased_data.end(); el++) {
+                heap.push(*el);
+            }
+            assert(heap_has_pop_invariant(heap));
+        }
     }
 }
 
 int main(int argc, const char* argv[]) {
+    //test_broken();
+    test_erase();
     test_basic_interfaces();
     return 0;
 }
