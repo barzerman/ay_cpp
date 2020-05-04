@@ -1,5 +1,3 @@
-#pragma clang diagnostic push
-#pragma clang diagnostic push
 #pragma ide diagnostic ignored "UnusedGlobalDeclarationInspection"
 #pragma ide diagnostic ignored "modernize-use-nodiscard"
 //
@@ -19,20 +17,20 @@
 // and position tracing. every new element placed in the array
 // invokes the callback as its position changes
 // * pos 0 - is not part of the heap - the heap starts from 1
-// DataType - the data we store in the heap
+// ValueType - the value we store in the heap
 // PosTracker - callable used to keep track of the element's position.
 //              must have void operator(int) {} defined
 
-using identity = struct {void operator()(int){};};
-inline std::ostream & operator << (std::ostream& fp, const identity& ) {return fp << "<identity>";}
+using noop = struct {template <typename T> void operator()(T&&, int){};};
 
-template <typename DataType, typename Compare=std::less<>, typename PosTracker = identity>
-class dma_heap {
+inline std::ostream & operator << (std::ostream& fp, const noop& ) {return fp << "<noop>";}
+
+template <typename ValueType, typename Compare=std::less<>, typename PosTracker = noop>
+class vector_heap {
 public:
     // region Nested Types and Constants
     using tracker_type = PosTracker;
-    using data_type = DataType;
-    using value_type = std::pair<data_type, tracker_type>;
+    using value_type = ValueType;
     using vector_type = typename std::vector<value_type>;
     using size_type = typename vector_type::size_type;
     using path_type = std::vector<size_type>; // path in the binary tree 0-root, ... parent(pos), pos
@@ -50,7 +48,7 @@ public:
     // tree traversal constant iterator
     template <template <typename...> typename Container> class traverse_iterator {
     public:
-        explicit traverse_iterator(const dma_heap& h) : heap_(h), cur_pos_(heap_.root()) {
+        explicit traverse_iterator(const vector_heap& h) : heap_(h), cur_pos_(heap_.root()) {
             if(cur_pos_)
                 tainer_.push(cur_pos_);
         }
@@ -69,15 +67,15 @@ public:
             cur_pos_ = is_valid() ? peek_next_() : 0;
             return *this;
         }
-        const dma_heap::value_type& operator *() const {
+        const vector_heap::value_type& operator *() const {
             return heap_.value(cur_pos_);
         }
-        const dma_heap::value_type& operator ->() const {
+        const vector_heap::value_type& operator ->() const {
             return heap_.value(cur_pos_);
         }
 
     private:
-        const dma_heap& heap_;
+        const vector_heap& heap_;
         size_type cur_pos_;
         using tainer_type = Container<size_type>;
         tainer_type tainer_;
@@ -103,34 +101,34 @@ public:
     dfs_iterator dfs_begin() const {return std::move(dfs_iterator (*this));}
     bfs_iterator bfs_begin() const {return bfs_iterator (*this);}
 
-    size_type count_data(const data_type& d) const {
+    size_type count_value(const value_type& d) const {
         size_type count = 0;
-        scan_data(d, [&] (size_type pos) {
-            count ++;
+        scan_values(d, [&](size_type pos) {
+            count++;
         });
         return count;
     }
-    // scans the heap and invoke the callback `cb` every time data value `d` is encountered
-    // callback must have `operator()(const data_type&)` defined
-    template <typename CB> void scan_data(const data_type& d, CB cb) const {
+    // scans the heap and invoke the callback `cb` every time value value `v` is encountered
+    // callback must have `operator()(const value_type&)` defined
+    template <typename CB> void scan_values(const value_type& v, CB cb) const {
         if(empty())
             return;
 
         for(auto i = vec_.begin() + ROOT_POS; i != vec_.end(); i++) {
-            if(i->first == d) {
+            if(*i == v) {
                 cb(i-vec_.begin());
             }
         }
     }
     // endregion
     // region Constructors and Assignment operators
-    dma_heap() = default;
-    dma_heap(const dma_heap&) = default;
+    vector_heap() = default;
+    vector_heap(const vector_heap&) = default;
 
-    dma_heap(dma_heap&&)  noexcept = default;
+    vector_heap(vector_heap&&)  noexcept = default;
 
-    dma_heap& operator =(dma_heap&&)  noexcept = default;
-    template <typename Iter> dma_heap(Iter begin, Iter end) {
+    vector_heap& operator =(vector_heap&&)  noexcept = default;
+    template <typename Iter> vector_heap(Iter begin, Iter end) {
         for(auto i = begin; i != end; i++ ) {
             push(*i);
         }
@@ -138,29 +136,20 @@ public:
 
     // endregion
     // region Mutating interfaces
-    template<typename U> void push(U&& v) {
+    void push(value_type && v) {
         if (vec_.empty())
             vec_.resize(ROOT_POS);
 
-        if constexpr(std::is_same_v<std::decay_t<U>,std::decay_t<value_type>> ) {
-            vec_.emplace_back(v);
-        } else if constexpr(std::is_same_v<std::decay_t<U>,std::decay_t<data_type>> ) {
-            vec_.emplace_back(std::move(value_type {v, std::move(identity())}));
-        } else {
-            vec_.emplace_back(std::move(value_type {v}));
-        }
+        vec_.emplace_back(v);
         filter_up_();
-    }
-
-    template<typename U = data_type> void push(U&& dt, PosTracker&& pt) {
-        static_assert(std::is_same_v<std::decay_t<U>, std::decay_t<data_type>>);
-        push(std::move(value_type {dt, pt}));
     }
 
     // pops the top element
     value_type pop() {
         auto rv = vec_[ROOT_POS];
-        if constexpr (!std::is_same_v<tracker_type, identity>) {vec_.back().second(0);}
+        if constexpr (!std::is_same_v<tracker_type, noop>) {
+            tracker_(vec_.back(), 0);
+        }
         vec_[ROOT_POS] = vec_.back();
         vec_.pop_back();
         filter_down_();
@@ -169,14 +158,13 @@ public:
 
     void erase(size_type pos) {
         if(pos == last_pos()) {
-            if constexpr (!std::is_same_v<tracker_type, identity>) {vec_.back().second(0);}
-            vec_.back().second(0);
+            tracker_(vec_.back(), 0);
             vec_.pop_back();
         } else {
-            vec_[pos].second(0);
+            tracker_(vec_[pos], 0);
             vec_[pos] = vec_.back();
             vec_.pop_back();
-            vec_[pos].second(pos);
+            tracker_(vec_[pos], pos);
             if(pos < ROOT_POS) {
                 filter_down_(pos);
             }
@@ -191,9 +179,9 @@ public:
     }
 
     void clear() {
-        if constexpr (!std::is_same_v<tracker_type, identity>) {
+        if constexpr (!std::is_same_v<tracker_type, noop>) {
             for(size_type i = 0; i < vec_.size(); i++) {
-                vec_[i].second(0);
+                tracker_(vec_[i], 0);
             }
         }
         vec_.clear();
@@ -208,7 +196,6 @@ public:
     size_type last_pos() const {return vec_.size() - ROOT_POS; }
 
     const value_type& value(size_type pos=ROOT_POS) const {return vec_[pos];}
-    const data_type & data(size_type pos=ROOT_POS) const {return vec_[pos].first;}
 
     children_type children(size_type pos) const {
         if( auto left = 2*pos, right = left +1; left < last_pos()) {
@@ -220,11 +207,14 @@ public:
         }
     }
     constexpr size_type root() const { return (empty() ? 0: ROOT_POS);}
+
+    const tracker_type & tracker() const {return tracker_;}
+    const tracker_type & tracker()  {return tracker_;}
     const auto& get_vec() const {return vec_;}
     // endregion
 private:
     bool is_x_lt_y_(size_type x, size_type y) const {
-        return Compare()(vec_[x].first, vec_[y].first);
+        return Compare()(vec_[x], vec_[y]);
     }
     // if node is less than its parent returns the parents position
     // otherwise returns 0
@@ -276,12 +266,11 @@ private:
     void swap_positions_(size_type& x, size_type& y)  {
         std::iter_swap(vec_.begin()+x, vec_.begin()+y);
         std::swap(x, y);
-        vec_[x].second(x);
-        vec_[y].second(y);
+        tracker_(vec_[x], x);
+        tracker_(vec_[y], y);
     }
     std::vector<value_type> vec_;
+    tracker_type tracker_;
 };
 
 #endif //CPP_DMA_HEAP_H
-
-#pragma clang diagnostic pop
