@@ -318,7 +318,7 @@ template <
 struct intrusive_tracker {
     // this is a potentially unsafe kind of tracker, use with caution.
     // it stores a pointer to the heap position as `second` in the pair
-    // although
+    // although potentially unsafe this is MUCH faster than the kv tracker
     using heap_data_t = HeapData;
     using updater_t = Updater;
     using tracked_position_t = typename std::iterator_traits<iterator_data_t>::value_type;
