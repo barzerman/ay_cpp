@@ -16,10 +16,10 @@
 
 
 // array heap implementation with direct access to elements
-// and position tracing.
-// if position tracer object is defined as anything other than a noop
+// and position tracking.
+// if position tracker object is defined as anything other than a noop
 // then every time position of the element changes in the heap array
-// the tracer object is invoked with the new position.
+// the tracker object is invoked with the new position.
 
 using noop = struct {template <typename T> void operator()(T&, int){};};
 
