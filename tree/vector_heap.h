@@ -12,6 +12,8 @@
 #include <stack>
 #include <queue>
 #include <iostream>
+#include <unordered_map>
+
 
 // array heap implementation with direct access to elements
 // and position tracing. every new element placed in the array
@@ -141,16 +143,17 @@ public:
             vec_.resize(ROOT_POS);
 
         vec_.emplace_back(v);
+        tracker_(vec_.back(), last_pos());
         filter_up_();
     }
 
     // pops the top element
     value_type pop() {
         auto rv = vec_[ROOT_POS];
-        if constexpr (!std::is_same_v<tracker_type, noop>) {
-            tracker_(vec_.back(), 0);
-        }
+        tracker_(vec_[ROOT_POS], 0);
         vec_[ROOT_POS] = vec_.back();
+        tracker_(vec_[ROOT_POS], ROOT_POS);
+
         vec_.pop_back();
         filter_down_();
         return rv;
@@ -209,7 +212,7 @@ public:
     constexpr size_type root() const { return (empty() ? 0: ROOT_POS);}
 
     const tracker_type & tracker() const {return tracker_;}
-    const tracker_type & tracker()  {return tracker_;}
+    tracker_type & tracker()  {return tracker_;}
     const auto& get_vec() const {return vec_;}
     // endregion
 private:
@@ -271,6 +274,65 @@ private:
     }
     std::vector<value_type> vec_;
     tracker_type tracker_;
+};
+
+template <typename HeapData, typename tracker_key, template <typename...> typename kv_t=std::unordered_map, typename size_type=unsigned long>
+struct kv_heap_tracker {
+    // non-intrusive heap tracker based on key value pairs.
+    // values in the heap are stored together with a key, which is used by the tracker's own
+    // position map, which maps the `key` to the position of that key in the heap array
+    using heap_data_t = HeapData;
+    using heap_value_t = std::pair<heap_data_t , tracker_key>;
+
+    struct heap_value_compare {
+        bool operator ()(const heap_value_t& l, const heap_value_t& r) const {
+            return l.first < r.first;
+        }
+    };
+    using pos_map_t = kv_t<tracker_key, size_type>;
+
+    void operator()(const heap_value_t& v, size_type pos) {
+        if(!pos) { // setting element's pos to 0 means it's being deleted from the heap
+            pos_map.erase(v.second);
+        } else {
+            if(auto x = pos_map.find(v.second); x != pos_map.end()) {
+                x->second = pos;
+            }
+        }
+    }
+    pos_map_t pos_map;
+};
+
+template <typename T, typename Ptr>
+struct intrusive_updater_ptr {
+    void operator()(std::pair<T, Ptr> &p, typename std::iterator_traits<Ptr>::value_type pos) {
+        *(p.second) = pos;
+    }
+};
+
+template <
+        typename HeapData,
+        typename iterator_data_t,
+        typename Updater=intrusive_updater_ptr<HeapData, iterator_data_t>
+        >
+struct intrusive_tracker {
+    // this is a potentially unsafe kind of tracker, use with caution.
+    // it stores a pointer to the heap position as `second` in the pair
+    // although
+    using heap_data_t = HeapData;
+    using updater_t = Updater;
+    using tracked_position_t = typename std::iterator_traits<iterator_data_t>::value_type;
+
+    using heap_value_t = std::pair<heap_data_t , iterator_data_t>;
+    struct heap_value_compare {
+        bool operator ()(const heap_value_t& l, const heap_value_t& r) const {
+            return l.first < r.first;
+        }
+    };
+
+    void operator()(heap_value_t& v, tracked_position_t pos) {
+        updater_t()(v, pos);
+    }
 };
 
 #endif //CPP_DMA_HEAP_H

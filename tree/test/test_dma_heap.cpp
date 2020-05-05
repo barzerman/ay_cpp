@@ -96,37 +96,76 @@ namespace {
     }
 
     namespace tracking {
-        template <typename tracker_key, typename heap_data_t, template <typename...> typename kv_t=std::unordered_map, typename size_type=unsigned long>
-        struct KVHeapTracker {
-            using heap_value_t = std::pair<heap_data_t , tracker_key>;
 
-            struct heap_value_compare {
-                bool operator ()(const heap_value_t& l, const heap_value_t& r) const {
-                    return l.first < r.first;
-                }
-            };
-            using pos_map_t = kv_t<tracker_key, size_type>;
+        void test_kv_tracker() {
+            using tracker_t = kv_heap_tracker<int, std::string>;
+            vector_heap<tracker_t::heap_value_t , tracker_t::heap_value_compare, tracker_t> heap;
 
-            void operator()(const heap_value_t& v, size_type pos) {
-                if(auto x = pos_map.find(v.second); x != pos_map.end()) {
-                    x.second = pos;
-                }
+            auto arr = make_shuffled_array<int>(100);
+            auto& pos_map = heap.tracker().pos_map;
+
+            std::vector<std::string> names;
+            names.reserve(arr.size());
+
+            for(int i=1; i< arr.size(); i++) {
+                std::ostringstream sstr;
+                sstr << "element" << arr[i];
+                names.emplace_back(std::string(sstr.str()));
+
+                const std::string& name = names.back().c_str();
+                pos_map[name] = 0;
+                heap.push(tracker_t::heap_value_t {arr[i], std::string_view (name)});
             }
-            pos_map_t pos_map;
-        };
-        void test_basic() {
-            KVHeapTracker<std::string_view , int> tracker;
-            using tracker_t = decltype(tracker);
-            vector_heap<tracker_t ::heap_value_t , tracker_t::heap_value_compare, tracker_t> heap;
+            // checking pos consistency
+            auto pop_count = 1;
+            do {
+                for(const auto& a: heap.tracker().pos_map) {
+                    assert(a.first == heap.value(a.second).second);
+                }
+                auto v = heap.pop();
+                pop_count++;
+            } while(!heap.empty());
+            assert(pop_count == arr.size());
+        }
+        void test_intrusive_tracker() {
+            using tracker_t = intrusive_tracker<int, unsigned long *>;
+            vector_heap<tracker_t::heap_value_t, tracker_t::heap_value_compare, tracker_t> heap;
 
-            //vector_heap<decltype(tracker)::heap_value,
+            auto arr = make_shuffled_array<int>(100);
+            std::vector<std::pair<int, tracker_t::tracked_position_t>> tracker_vector;
+            // need to preallocate the vector so that pointers stay valid as we push_back
+            tracker_vector.reserve(arr.size());
+
+            for (int i = 1; i < arr.size(); i++) {
+                tracker_vector.emplace_back(decltype(tracker_vector)::value_type{arr[i], 0});
+                heap.push(tracker_t::heap_value_t{arr[i], &(tracker_vector.back().second)});
+            }
+            for(auto const& a: tracker_vector) {
+                assert(a.first == heap.value(a.second).first);
+            }
+            auto pop_count = 0;
+
+            do {
+                auto deleted_count = 0;
+                for(const auto& a: tracker_vector) {
+                    if(a.second)
+                     assert(a.first == heap.value(a.second).first);
+                    else
+                        deleted_count ++;
+                }
+                assert(pop_count == deleted_count);
+                heap.pop();
+                pop_count++;
+            } while(!heap.empty());
+
         }
     }
 }
 
 int main(int argc, const char* argv[]) {
+    tracking::test_intrusive_tracker();
+    tracking::test_kv_tracker();
     test_erase();
     test_basic_interfaces();
-    tracking::test_basic();
     return 0;
 }
