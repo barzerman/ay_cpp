@@ -16,14 +16,12 @@
 
 
 // array heap implementation with direct access to elements
-// and position tracing. every new element placed in the array
-// invokes the callback as its position changes
-// * pos 0 - is not part of the heap - the heap starts from 1
-// ValueType - the value we store in the heap
-// PosTracker - callable used to keep track of the element's position.
-//              must have void operator(int) {} defined
+// and position tracing.
+// if position tracer object is defined as anything other than a noop
+// then every time position of the element changes in the heap array
+// the tracer object is invoked with the new position.
 
-using noop = struct {template <typename T> void operator()(T&&, int){};};
+using noop = struct {template <typename T> void operator()(T&, int){};};
 
 inline std::ostream & operator << (std::ostream& fp, const noop& ) {return fp << "<noop>";}
 
