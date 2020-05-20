@@ -3,5 +3,5 @@ project(cpp)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(dma_heap tree/test/test_dma_heap.cpp tree/BT.cpp tree/BT.h time_window.cpp time_window.h tree/vector_heap.cpp tree/vector_heap.h test_util.h)
-add_executable(cpp main.cpp tree/BT.cpp tree/BT.h time_window.cpp time_window.h tree/vector_heap.cpp tree/vector_heap.h test_util.h)
+add_executable(dma_heap container/test/test_container.cpp container/BT.cpp container/BT.h time_window.cpp time_window.h container/vector_heap.cpp container/vector_heap.h test_util.h container/circle_queue.h)
+add_executable(cpp main.cpp container/BT.cpp container/BT.h time_window.cpp time_window.h container/vector_heap.cpp container/vector_heap.h test_util.h)

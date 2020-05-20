@@ -2,7 +2,7 @@
 #include <any>
 #include <map>
 #include <typeindex>
-#include "tree/BT.h"
+#include "container/BT.h"
 
 struct Foo {
     template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
@@ -43,11 +43,11 @@ namespace test {
 
         xm.emplace(
                 std::piecewise_construct,
-                std::forward_as_tuple("shit"),
+                std::forward_as_tuple("w"),
                 std::forward_as_tuple(10, 'w')
                 );
 
-        std::tuple<std::string, std::string> tp = {"fuck", "moo"};
+        std::tuple<std::string, std::string> tp = {"buck", "moo"};
 
         xm.emplace(tp);
 
@@ -106,6 +106,5 @@ int main() {
     if(!a.print<float>(std::cout))
         std::cerr << "<no value>for type:" << typeid(float).name() << std::endl;
 
-    std::cerr << "shit:" << sizeof(long long int) << std::endl;
     return 0;
 }

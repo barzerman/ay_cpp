@@ -33,7 +33,7 @@ public:
     using value_type = ValueType;
     using vector_type = typename std::vector<value_type>;
     using size_type = typename vector_type::size_type;
-    using path_type = std::vector<size_type>; // path in the binary tree 0-root, ... parent(pos), pos
+    using path_type = std::vector<size_type>; // path in the binary container 0-root, ... parent(pos), pos
     using children_type = std::pair<size_type, size_type>;
     static const size_type ROOT_POS = 1;
 
@@ -45,7 +45,7 @@ public:
 
     // endregion
     // region Iterators
-    // tree traversal constant iterator
+    // container traversal constant iterator
     template <template <typename...> typename Container> class traverse_iterator {
     public:
         explicit traverse_iterator(const vector_heap& h) : heap_(h), cur_pos_(heap_.root()) {

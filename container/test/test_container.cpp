@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <unordered_map>
 #include "../vector_heap.h"
+#include "../circle_queue.h"
 #include "../../test_util.h"
 
 namespace {
@@ -20,10 +21,15 @@ namespace {
         }
         return true;
     }
+    template <typename CB>
+    void prange(const CB& cb, int to, int from=0) {
+        for(int i = from; i < to; i++)
+            cb(i);
+    }
 }
 
 using namespace test_util;
-namespace {
+namespace test_vector_heap {
     void test_basic_interfaces() {
         auto arr = make_shuffled_array<int>(100);
         vector_heap<decltype(arr)::value_type> heap;
@@ -160,12 +166,24 @@ namespace {
 
         }
     }
+    void test_all() {
+        tracking::test_intrusive_tracker();
+        tracking::test_kv_tracker();
+        test_erase();
+        test_basic_interfaces();
+    }
 }
-
+namespace test_circular_vector {
+    void test_basic() {
+        circle_queue<int> q(10);
+        prange([&](int i) {q.push_back(i);}, 18, 8);
+        while(!q.empty()) {
+            std::cout << "SHIT:" << q.unplace_back() << std::endl;
+        }
+    }
+}
 int main(int argc, const char* argv[]) {
-    tracking::test_intrusive_tracker();
-    tracking::test_kv_tracker();
-    test_erase();
-    test_basic_interfaces();
+    test_vector_heap::test_all();
+    test_circular_vector::test_basic();
     return 0;
 }
