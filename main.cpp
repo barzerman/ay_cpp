@@ -8,51 +8,6 @@
 #include "tree/bool_trie.h"
 
 
-void AbcRun() {
-    std::atomic<int> state_ = 0;
-
-    std::vector<std::thread> th;
-    th.emplace_back(
-        std::thread([&]() {
-            for(int i = 0; i< 3; ) {
-                auto s = state_.load();
-                if(s == 0) {
-                    std::cerr << 'A' << std::endl;
-                    i++;
-                    while(!state_.compare_exchange_weak(s, 1));
-                }
-            }
-        })
-    );
-    th.emplace_back(
-        std::thread([&]() {
-            for(int i = 0; i< 3; ) {
-                auto s = state_.load();
-                if(s == 1) {
-                    std::cerr << 'B' <<std::endl;
-                    i++;
-                    while(!state_.compare_exchange_weak(s, 2));
-                }
-            }
-        })
-    );
-    th.emplace_back(
-            std::thread([&]() {
-                for(int i = 0; i< 3; ) {
-                    auto s = state_.load();
-                    if(s == 2) {
-                        std::cerr << 'C' <<std::endl;
-                        i++;
-                        while(!state_.compare_exchange_weak(s, 0));
-                    }
-                }
-            })
-    );
-
-
-    for(auto &a: th ) {a.join();}
-}
-
 namespace {
     using namespace bool_trie;
     struct TriePrinter {
@@ -75,7 +30,6 @@ namespace {
         return false;
     }
 }
-
 namespace {
     using namespace std;
 
@@ -138,10 +92,140 @@ namespace {
     }
 }
 
+namespace lock_free {
+    void AbcRun_old() {
+        std::atomic<int> state_ = 0;
+
+        std::vector<std::thread> th;
+        th.emplace_back(
+                std::thread([&]() {
+                    for (int i = 0; i < 3;) {
+                        auto s = state_.load();
+                        if (s == 0) {
+                            std::cerr << 'A' << std::endl;
+                            i++;
+                            while (!state_.compare_exchange_weak(s, 1));
+                        }
+                    }
+                })
+        );
+        th.emplace_back(
+                std::thread([&]() {
+                    for (int i = 0; i < 3;) {
+                        auto s = state_.load();
+                        if (s == 1) {
+                            std::cerr << 'B' << std::endl;
+                            i++;
+                            while (!state_.compare_exchange_weak(s, 2));
+                        }
+                    }
+                })
+        );
+        th.emplace_back(
+                std::thread([&]() {
+                    for (int i = 0; i < 3;) {
+                        auto s = state_.load();
+                        if (s == 2) {
+                            std::cerr << 'C' << std::endl;
+                            i++;
+                            while (!state_.compare_exchange_weak(s, 0));
+                        }
+                    }
+                })
+        );
+
+        for (auto &a: th) { a.join(); }
+
+    }
+
+    class WorkerThread {
+        using int_atomic = std::atomic<int>;
+        int thread_num_;
+        int num_iter_;
+        int total_threads_;
+        int_atomic & state_;
+    public:
+        WorkerThread(int_atomic& st, int th_num, int num_it, int total_threads) :
+                thread_num_(th_num),
+                num_iter_(num_it),
+                total_threads_(total_threads),
+                state_(st)
+        {}
+        void operator() () {
+            auto next_thread = (thread_num_+1)%total_threads_;
+            for (int i = 0; i < num_iter_;) {
+                auto s = state_.load();
+                if (s == thread_num_) {
+                    std::cerr << (char)('A'+thread_num_) << std::endl;
+                    i++;
+                    while (!state_.compare_exchange_weak(s, next_thread));
+                }
+            }
+        }
+    };
+
+    void AbcRun(int num_threads, int num_iter) {
+        std::atomic<int> state_ = 0;
+        std::vector<std::thread> th;
+        for(int i =0; i< num_threads; i++) {
+            th.emplace_back(
+                    std::thread(
+                            WorkerThread(state_, i, num_iter, num_threads)));
+        }
+        for (auto &a: th) { a.join(); }
+    }
+}
+
+namespace locks {
+    using lock_t = std::mutex;
+    struct WorkerThread {
+        int thread_id_; // id of this thread
+        int num_iter_; // number of iterations
+        int max_threads_; // total number of threads
+        int &cur_thread_;
+        lock_t &lock_;
+
+        WorkerThread(lock_t &lock, int &cur_thread, int thread_id, int num_iter, int max_threads) :
+                thread_id_(thread_id),
+                num_iter_(num_iter),
+                max_threads_(max_threads),
+                cur_thread_(cur_thread),
+                lock_(lock)
+        {}
+        void operator()( ) {
+
+            for(int i=0; i< num_iter_;) {
+                while(true) {
+                    if(lock_.try_lock()) {
+                        if(cur_thread_ == thread_id_) {
+                            std::cerr << (char)('A'+thread_id_) << std::endl;
+                            i++;
+                            cur_thread_ = (cur_thread_+1)%max_threads_;
+                        }
+                        lock_.unlock();
+                    }
+
+                    break;
+                }
+            }
+        }
+    };
+    void AbcRun(const int num_threads, const int num_iter) {
+        std::mutex state_;
+        int cur_thread_= 0;
+        std::vector<std::thread> th;
+        for(int i =0; i< num_threads; i++) {
+            th.emplace_back(
+                    std::thread(
+                            WorkerThread(state_, cur_thread_, i, num_iter, num_threads)));
+        }
+        for (auto &a: th) { a.join(); }
+    }
+
+}
+
 int main() {
-    // std::cout << "SHIT " << char_in('a', 'b', 'a', 'c') << std::endl;
-    // run_bool_trie();
-    //test_points();
-    AbcRun();
+    //lock_free::AbcRun(4, 10);
+    locks::AbcRun(3, 3);
     return 0;
 }
