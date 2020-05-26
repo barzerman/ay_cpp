@@ -183,41 +183,44 @@ namespace locks {
         int num_iter_; // number of iterations
         int max_threads_; // total number of threads
         int &cur_thread_;
+        std::condition_variable& cond_;
         lock_t &lock_;
 
-        WorkerThread(lock_t &lock, int &cur_thread, int thread_id, int num_iter, int max_threads) :
+        WorkerThread(lock_t &lock, std::condition_variable& cond, int &cur_thread, int thread_id, int num_iter, int max_threads) :
                 thread_id_(thread_id),
                 num_iter_(num_iter),
                 max_threads_(max_threads),
                 cur_thread_(cur_thread),
+                cond_(cond),
                 lock_(lock)
         {}
         void operator()( ) {
+            int i = 0;
 
-            for(int i=0; i< num_iter_;) {
-                while(true) {
-                    if(lock_.try_lock()) {
-                        if(cur_thread_ == thread_id_) {
-                            std::cerr << (char)('A'+thread_id_) << std::endl;
-                            i++;
-                            cur_thread_ = (cur_thread_+1)%max_threads_;
-                        }
-                        lock_.unlock();
-                    }
+            do {
+                std::unique_lock ul(lock_);
+                while(cur_thread_!= thread_id_) cond_.wait(ul);
+                std::cerr << (char)('A'+thread_id_) << std::endl;
+                i++;
+                cur_thread_ = (cur_thread_+1)%max_threads_;
+                cond_.notify_all();
 
-                    break;
-                }
-            }
+                if(i>= num_iter_)
+                    return;
+            } while(true);
+
+
         }
     };
     void AbcRun(const int num_threads, const int num_iter) {
-        std::mutex state_;
+        std::condition_variable cond;
+        std::mutex mtx;
         int cur_thread_= 0;
         std::vector<std::thread> th;
         for(int i =0; i< num_threads; i++) {
             th.emplace_back(
                     std::thread(
-                            WorkerThread(state_, cur_thread_, i, num_iter, num_threads)));
+                            WorkerThread(mtx, cond, cur_thread_, i, num_iter, num_threads)));
         }
         for (auto &a: th) { a.join(); }
     }
@@ -226,6 +229,6 @@ namespace locks {
 
 int main() {
     //lock_free::AbcRun(4, 10);
-    locks::AbcRun(3, 3);
+    locks::AbcRun(5, 3);
     return 0;
 }
